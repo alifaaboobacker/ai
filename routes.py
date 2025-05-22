@@ -9,7 +9,7 @@ import os
 
 load_dotenv()
 
-origin = os.getenv("ORIGIN", "*")  # fallback to "*" if ORIGIN is not set
+origin = os.getenv("ORIGIN")  # fallback to "*" if ORIGIN is not set
 hf_token = os.getenv("HF_TOKEN")
 if not hf_token:
     raise RuntimeError("Missing Hugging Face token in environment (HF_TOKEN)")
