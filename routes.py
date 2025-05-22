@@ -1,28 +1,32 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 import requests
-from vector import ingest_markdown
+from vector import ingest_markdown, initialize_chroma_db, query_knowledge_base
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import os
-from vector import initialize_chroma_db, query_knowledge_base
 
 load_dotenv()
-origin = os.getenv("ORIGIN")
+
+origin = os.getenv("ORIGIN", "*")  # fallback to "*" if ORIGIN is not set
+hf_token = os.getenv("HF_TOKEN")
+if not hf_token:
+    raise RuntimeError("Missing Hugging Face token in environment (HF_TOKEN)")
+
 # FastAPI app
 app = FastAPI()
 
-
 # Initialize ChromaDB collection
 chroma_client, collection = initialize_chroma_db()
+
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origin,            # Only allow trusted domains
+    allow_origins=[origin],
     allow_credentials=True,
-    allow_methods=["GET", "POST"],    # Specify allowed methods
-    allow_headers=["*"],              # Or specify allowed headers
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
 )
 
 # Request model
@@ -42,23 +46,29 @@ Question:
 
 Answer:
 """
-    hf_token = os.getenv("HF_TOKEN")
     api_url = f"https://api-inference.huggingface.co/models/{model}"
     headers = {"Authorization": f"Bearer {hf_token}"}
     payload = {"inputs": prompt}
 
     response = requests.post(api_url, headers=headers, json=payload)
-    response.raise_for_status()
+    try:
+        response.raise_for_status()
+        output = response.json()
+        return output[0]["generated_text"].split("Answer:")[-1].strip()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Hugging Face Error: {e}")
 
-    output = response.json()
-    return output[0]["generated_text"].split("Answer:")[-1].strip()
-@app.on_event("startup")
-def load_vectors():
+# Optional: Trigger vector ingestion manually (saves memory on startup)
+@app.post("/load-docs")
+def load_docs():
     ingest_markdown("./assets/alifa_knowledgebase.md", collection)
+    return {"message": "Documents loaded successfully"}
 
 @app.post("/chat")
 def chat(request: QueryRequest):
     results = query_knowledge_base(collection, request.question, section_filter=request.section)
+    if not results['documents'][0]:
+        return {"question": request.question, "answer": "No relevant context found."}
     context = "\n\n".join(results['documents'][0])
     answer = call_ollama_llm(context, request.question)
     return {"question": request.question, "answer": answer}
