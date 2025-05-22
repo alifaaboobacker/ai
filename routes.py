@@ -23,7 +23,7 @@ chroma_client, collection = initialize_chroma_db()
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[origin],
+    allow_origins=origin,
     allow_credentials=True,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
@@ -34,7 +34,7 @@ class QueryRequest(BaseModel):
     question: str
     section: Optional[str] = None
 
-def call_ollama_llm(context: str, question: str, model: str = "mistralai/Mistral-7B-Instruct-v0.1") -> str:
+def call_ollama_llm(context: str, question: str, model: str = "HuggingFaceH4/zephyr-7b-beta") -> str:
     prompt = f"""
 You are an intelligent and friendly assistant. Based on the following context, answer the question.
 
@@ -59,10 +59,10 @@ Answer:
         raise HTTPException(status_code=500, detail=f"Hugging Face Error: {e}")
 
 # Optional: Trigger vector ingestion manually (saves memory on startup)
-@app.post("/load-docs")
+@app.on_event("startup")
 def load_docs():
     ingest_markdown("./assets/alifa_knowledgebase.md", collection)
-    return {"message": "Documents loaded successfully"}
+
 
 @app.post("/chat")
 def chat(request: QueryRequest):
