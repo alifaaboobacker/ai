@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import Optional
-import ollama
+import requests
 from vector import ingest_markdown
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
@@ -30,7 +30,7 @@ class QueryRequest(BaseModel):
     question: str
     section: Optional[str] = None
 
-def call_ollama_llm(context: str, question: str, model: str = "llama3") -> str:
+def call_ollama_llm(context: str, question: str, model: str = "mistralai/Mistral-7B-Instruct-v0.1") -> str:
     prompt = f"""
 You are an intelligent and friendly assistant. Based on the following context, answer the question.
 
@@ -42,8 +42,16 @@ Question:
 
 Answer:
 """
-    response = ollama.chat(model=model, messages=[{"role": "user", "content": prompt}])
-    return response['message']['content']
+    hf_token = os.getenv("HF_TOKEN")
+    api_url = f"https://api-inference.huggingface.co/models/{model}"
+    headers = {"Authorization": f"Bearer {hf_token}"}
+    payload = {"inputs": prompt}
+
+    response = requests.post(api_url, headers=headers, json=payload)
+    response.raise_for_status()
+
+    output = response.json()
+    return output[0]["generated_text"].split("Answer:")[-1].strip()
 @app.on_event("startup")
 def load_vectors():
     ingest_markdown("./assets/alifa_knowledgebase.md", collection)

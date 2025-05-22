@@ -4,3 +4,5 @@ python-dotenv
 ollama
 chromadb
 sentence-transformers
+requests
+
