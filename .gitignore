@@ -1,0 +1,4 @@
+bot/
+__pycache__/
+.env
+chroma_db/    # if your chroma DB files get persisted locally
